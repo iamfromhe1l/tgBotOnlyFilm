@@ -261,7 +261,7 @@ async def filmtotime_clb(callback_query: types.CallbackQuery, state: FSMContext)
   await bot.send_message(callback_query.from_user.id, text=f'Вы выбрали время: *{callback_query.data}*', parse_mode='Markdown', reply_markup=cancel_reply_keyboard)
   cart_inline_keyboard = types.InlineKeyboardMarkup(row_width=2)
   async with state.proxy() as data:
-    cart_inline_keyboard.add(types.InlineKeyboardButton(text='Оплтаить', url=tariffs[data["order"]["tariff"]]["link"]))
+    cart_inline_keyboard.add(types.InlineKeyboardButton(text='Оплатить', url=tariffs[data["order"]["tariff"]]["link"]))
     await bot.send_message(callback_query.from_user.id, text=f'*К ОПЛАТЕ: {tariffs[data["order"]["tariff"]]["price"]}* руб. 💵' + '\nНЕ ЗАБУДЬТЕ НАПИСАТЬ НИК ТЕЛЕГРАМА В КОММЕНТАРИЯХ К ОПЛАТЕ!!', parse_mode='Markdown', reply_markup=cart_inline_keyboard)
   
 
