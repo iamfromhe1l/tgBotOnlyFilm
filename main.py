@@ -38,6 +38,7 @@ async def on_shutdown(dispatcher):
   logging.warning('bye ;)')
 
 if __name__ == '__main__':
+  print(whapp_host, whapp_port)
   start_webhook(
     dispatcher=dp,
     webhook_path=wh_path,
