@@ -155,6 +155,14 @@ times = {
   '22:00': False,
 }
 
+class Form(StatesGroup):
+  tchoice = State()
+  city_choice = State()
+  premium_film_choice = State()
+  film_choice = State()
+  date_choice = State()
+  time_choice = State()
+
 @dp.message_handler(Text(contains='/start'), state='*')
 async def start_func(message: types.Message):
   await Form.tchoice.set()
