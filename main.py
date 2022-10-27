@@ -7,7 +7,7 @@ import logging
 TOKEN = os.getenv('BOT_TOKEN')
 HEROKU_APP_NAME = os.getenv('HEROKU_APP_NAME')
 
-wh_host = f'https://{HEROKU_APP_NAME}.heroku.com'
+wh_host = f'https://{HEROKU_APP_NAME}.herokuapp.com'
 wh_path = f'/webhook/{TOKEN}'
 wh_url = f'{wh_host}{wh_path}'
 
