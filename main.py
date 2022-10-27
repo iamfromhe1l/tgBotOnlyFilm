@@ -32,7 +32,7 @@ class Form(StatesGroup):
   city_choice = State()
   film_choice = State()
   time_choice = State()
-  
+
 # заполнять tariffs строго по модели tariffs = 'название тарифа': {'spec': ['1ая особенность', '2ая особенность', 'n-ая особенность'], 'price': цена}
 tariffs = {
   'Обычный': {
@@ -154,17 +154,6 @@ times = {
   '20:00': False,
   '22:00': False,
 }
-
-bot = Bot('5673775281:AAHXGZCqxa46I1L1M58gIZdekxIZlhkJlsk')
-dp = Dispatcher(bot, storage=MemoryStorage())
-
-class Form(StatesGroup):
-  tchoice = State()
-  city_choice = State()
-  premium_film_choice = State()
-  film_choice = State()
-  date_choice = State()
-  time_choice = State()
 
 @dp.message_handler(Text(contains='/start'), state='*')
 async def start_func(message: types.Message):
