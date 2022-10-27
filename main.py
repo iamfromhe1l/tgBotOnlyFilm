@@ -7,6 +7,8 @@ from aiogram.dispatcher.filters.state import State, StatesGroup
 from aiogram.utils.executor import start_webhook
 import os
 import logging
+import datetime
+from datetime import date, timedelta
 
 TOKEN = os.getenv('BOT_TOKEN')
 HEROKU_APP_NAME = os.getenv('HEROKU_APP_NAME')
@@ -21,8 +23,16 @@ whapp_port = os.getenv('PORT', default=6666)
 
 logging.basicConfig(level=logging.INFO)
 
+# bot config part
+bot = Bot(TOKEN)
+dp = Dispatcher(bot, storage=MemoryStorage())
 
-
+class Form(StatesGroup):
+  tchoice = State()
+  city_choice = State()
+  film_choice = State()
+  time_choice = State()
+  
 # заполнять tariffs строго по модели tariffs = 'название тарифа': {'spec': ['1ая особенность', '2ая особенность', 'n-ая особенность'], 'price': цена}
 tariffs = {
   'Обычный': {
@@ -33,7 +43,10 @@ tariffs = {
       'Фильм из каталога 🎬',
       'Вино Santo Stefano 🍷'
     ],
-    'price': 1990
+    'price': 1990,
+    'link': 'https://oplata.qiwi.com/form?invoiceUid=04ff5487-6c3b-4ebc-9267-a52ff1351e97',
+    'any_film': False,
+    'photo_link': 'https://live.staticflickr.com/65535/52458011252_ffa2bc1354_b.jpg'
   },
   'Вип': {
     'spec': [
@@ -44,7 +57,10 @@ tariffs = {
       'Вино Santo Stefano 🍷',
       'Кальян на выбор 💨'
     ],
-    'price': 2490
+    'price': 2490,
+    'link': 'https://oplata.qiwi.com/form?invoiceUid=089694f2-695e-4f7a-be6e-17cdd7b9960c',
+    'any_film': False,
+    'photo_link': 'https://live.staticflickr.com/65535/52458011227_82bf0a5e0c_b.jpg'
   },
   'Премиум': {
     'spec': [
@@ -56,7 +72,10 @@ tariffs = {
       'Экзотические фрукты 🍓',
       'Роллы/суши 🍱',
     ],
-    'price': 3290
+    'price': 3290,
+    'link': 'https://oplata.qiwi.com/form?invoiceUid=2e6841b6-47b8-43f7-b829-cb27ea210235',
+    'any_film': True,
+    'photo_link': 'https://live.staticflickr.com/65535/52458985960_53d72305a3_b.jpg'
   },
   'Премиум +': {
     'spec': [
@@ -70,7 +89,10 @@ tariffs = {
       'Шампанское 🥂',
       'Пачка Durex',
     ],
-    'price': 4990
+    'price': 4990,
+    'link': 'https://oplata.qiwi.com/form?invoiceUid=719001c5-cb7d-441b-8623-66219c23bec2',
+    'any_film': True,
+    'photo_link': 'https://live.staticflickr.com/65535/52458011197_3610309f26_b.jpg'
   },
 
 }
@@ -133,14 +155,15 @@ times = {
   '22:00': False,
 }
 
-# bot config part
-bot = Bot(TOKEN)
+bot = Bot('5673775281:AAHXGZCqxa46I1L1M58gIZdekxIZlhkJlsk')
 dp = Dispatcher(bot, storage=MemoryStorage())
 
 class Form(StatesGroup):
   tchoice = State()
   city_choice = State()
+  premium_film_choice = State()
   film_choice = State()
+  date_choice = State()
   time_choice = State()
 
 @dp.message_handler(Text(contains='/start'), state='*')
@@ -154,19 +177,17 @@ async def start_func(message: types.Message):
 
   for i in range(len(keys)):
     keyboard.add(types.KeyboardButton(keys[i]))
-
     text = f'-------------*{keys[i].upper()}*-------------' + '\n' + f'{keys[i]} тариф включает в себя:' + "".join("\n  -*"+e+"*" for e in tariffs[keys[i]]['spec']) + '\n' + f'Цена: *{tariffs[keys[i]]["price"]}* 💵'
-
     if i != len(keys)-1:
-      await message.answer(text, parse_mode='Markdown')
+      await bot.send_photo(chat_id=message.from_user.id, photo=tariffs[keys[i]]['photo_link'], caption=text, parse_mode='Markdown')
     else:
-      await message.answer(text, parse_mode='Markdown', reply_markup=keyboard)
+      await bot.send_photo(chat_id=message.from_user.id, photo=tariffs[keys[i]]['photo_link'], caption=text, parse_mode='Markdown', reply_markup=keyboard)
     
 @dp.message_handler(lambda message: message.text in list(tariffs.keys()), state=Form.tchoice)
 async def end_of_choice(message: types.Message, state: FSMContext):
   await Form.city_choice.set()
   async with state.proxy() as data:
-    data['total_price'] = tariffs[message.text]['price']
+    data['order'] = {"tariff": message.text}
   await message.answer(f'Вы выбрали тариф: {message.text}', reply_markup=types.ReplyKeyboardRemove())
   inline_keyboard = types.InlineKeyboardMarkup()
   for city in cities.keys():
@@ -174,36 +195,77 @@ async def end_of_choice(message: types.Message, state: FSMContext):
   await message.answer('Выберите город:', reply_markup=inline_keyboard)
 
 @dp.callback_query_handler(lambda c: c.data in list(cities.keys()), state=Form.city_choice)
-async def citytofilm_clb(callback_query: types.CallbackQuery):
+async def citytofilm_clb(callback_query: types.CallbackQuery, state: FSMContext):
+  any_film = False
+  async with state.proxy() as data:
+    data['order']['city'] = cities[callback_query.data]
+    any_film = tariffs[data['order']['tariff']]['any_film']
   await bot.delete_message(chat_id=callback_query.from_user.id, message_id=callback_query.message.message_id)
   await bot.send_message(callback_query.from_user.id, text=f'Вы выбрали город: *{cities[callback_query.data]}*', parse_mode='Markdown')
-  await Form.film_choice.set()
-  film_inline_keyboard = types.InlineKeyboardMarkup()
-  for key in films.keys():
-    film_inline_keyboard.add(types.InlineKeyboardButton(films[key], callback_data=key))
-  await bot.send_message(callback_query.from_user.id, text='Выберите фильм: ', reply_markup=film_inline_keyboard)
+  if any_film:
+    await Form.premium_film_choice.set()
+    await bot.send_message(callback_query.from_user.id, text='Вы выбрали тариф с выбором любого фильма!\nВыбор фильма позже можно будет обсудить\nВведите название фильма фильма: ')
+  else:
+    await Form.film_choice.set()
+    film_inline_keyboard = types.InlineKeyboardMarkup()
+    for key in films.keys():
+      film_inline_keyboard.add(types.InlineKeyboardButton(films[key], callback_data=key))
+    await bot.send_message(callback_query.from_user.id, text='Выберите фильм: ', reply_markup=film_inline_keyboard)
+
+@dp.message_handler(state=Form.premium_film_choice)
+async def premium_filmtotime_clb(message: types.Message, state: FSMContext):
+  async with state.proxy() as data:
+    data['order']['film'] = message.text
+  await message.answer(text=f'Вы выбрали фильм: {message.text}')
+  await Form.date_choice.set()
+  date_inline_keyboard = types.InlineKeyboardMarkup()
+  for i in range(1, 11):
+    cur_day = date.today() + timedelta(i)
+    next_day = f'{cur_day.day}.{cur_day.month}.{cur_day.year}'
+    date_inline_keyboard.add(types.InlineKeyboardButton(text=next_day, callback_data=next_day))
+  await message.answer(text='Выберите дату: ', reply_markup=date_inline_keyboard)
+
 
 @dp.callback_query_handler(lambda c: c.data in list(films.keys()), state=Form.film_choice)
-async def filmtotime_clb(callback_query: types.CallbackQuery):
+async def filmtotime_clb(callback_query: types.CallbackQuery, state: FSMContext):
   await bot.delete_message(chat_id=callback_query.from_user.id, message_id=callback_query.message.message_id)
+  async with state.proxy() as data:
+    data['order']['film'] = films[callback_query.data]
   await bot.send_message(callback_query.from_user.id, text=f'Вы выбрали фильм: *{films[callback_query.data]}*', parse_mode='Markdown')
+  await Form.date_choice.set()
+  date_inline_keyboard = types.InlineKeyboardMarkup()
+  for i in range(1, 11):
+    cur_day = date.today() + timedelta(i)
+    next_day = f'{cur_day.day}.{cur_day.month}.{cur_day.year}'
+    date_inline_keyboard.add(types.InlineKeyboardButton(text=next_day, callback_data=next_day))
+  await bot.send_message(callback_query.from_user.id, text='Выберите дату: ', reply_markup=date_inline_keyboard)
+
+@dp.callback_query_handler(lambda c: c.data.count('.') == 2, state=Form.date_choice)
+async def datetotime_clb(callback_query: types.CallbackQuery, state: FSMContext):
+  await bot.delete_message(chat_id=callback_query.from_user.id, message_id=callback_query.message.message_id)
+  async with state.proxy() as data:
+    data['order']['date'] = callback_query.data
+  await bot.send_message(callback_query.from_user.id, text=f'Вы выбрали дату: *{callback_query.data}*', parse_mode='Markdown')
   await Form.time_choice.set()
   time_inline_keyboard = types.InlineKeyboardMarkup()
   for key in times.keys():
     if not times[key]:
       time_inline_keyboard.add(types.InlineKeyboardButton(text=key, callback_data=key))
   await bot.send_message(callback_query.from_user.id, text='Выберите время: ', reply_markup=time_inline_keyboard)
-  
 
 @dp.callback_query_handler(lambda c: c.data in list(times.keys()), state=Form.time_choice)
 async def filmtotime_clb(callback_query: types.CallbackQuery, state: FSMContext):
   await bot.delete_message(chat_id=callback_query.from_user.id, message_id=callback_query.message.message_id)
+  async with state.proxy() as data:
+    data['order']['time'] = callback_query.data
+    data['order']['username'] = callback_query.from_user.username
+    await bot.send_message(chat_id='-1001846618674', text=f'User id: *@{data["order"]["username"]}*' + '\n' + f'Тариф: *{data["order"]["tariff"]}*' + '\n' + f'Город: *{data["order"]["city"]}*' + '\n' + f'Фильм: *{data["order"]["film"]}*' + '\n' + f'Дата: *{data["order"]["date"]}*' + '\n' + f'Время: *{data["order"]["time"]}*', parse_mode='Markdown')
   cancel_reply_keyboard = types.ReplyKeyboardMarkup(one_time_keyboard=True, resize_keyboard=True).add(types.KeyboardButton(text='Отмена/Сброс корзины/Начать заполнение заказа /start',))
   await bot.send_message(callback_query.from_user.id, text=f'Вы выбрали время: *{callback_query.data}*', parse_mode='Markdown', reply_markup=cancel_reply_keyboard)
   cart_inline_keyboard = types.InlineKeyboardMarkup(row_width=2)
-  cart_inline_keyboard.add(types.InlineKeyboardButton(text='Оплтаить', url='google.com'))
   async with state.proxy() as data:
-    await bot.send_message(callback_query.from_user.id, text=f'*К ОПЛАТЕ: {data["total_price"]}* руб. 💵' + '\nНЕ ЗАБУДЬТЕ НАПИСАТЬ НИК ТЕЛЕГРАМА В КОММЕНТАРИЯХ К ОПЛАТЕ!!', parse_mode='Markdown', reply_markup=cart_inline_keyboard)
+    cart_inline_keyboard.add(types.InlineKeyboardButton(text='Оплтаить', url=tariffs[data["order"]["tariff"]]["link"]))
+    await bot.send_message(callback_query.from_user.id, text=f'*К ОПЛАТЕ: {tariffs[data["order"]["tariff"]]["price"]}* руб. 💵' + '\nНЕ ЗАБУДЬТЕ НАПИСАТЬ НИК ТЕЛЕГРАМА В КОММЕНТАРИЯХ К ОПЛАТЕ!!', parse_mode='Markdown', reply_markup=cart_inline_keyboard)
   
 
 # startup function
